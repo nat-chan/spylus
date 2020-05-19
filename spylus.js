@@ -58,6 +58,52 @@ let Save = Canvas => class extends Canvas{
     };
 }
 
+let Paste = Canvas => class extends Canvas{
+    constructor({
+        paste_button,
+    }){
+        super(arguments[0]);
+        this.paste_button = paste_button;
+
+        paste_button.addEventListener("click", (e)=>{this.paste(e)});
+    }
+    paste(e){
+        read_clipboard(b=>{
+            let img = new Image();
+            img.onload = () => {
+                this.ctx.drawImage(img,0,0);
+            };
+            img.src = b;
+        })
+    }
+    read_clipboard(f){
+        navigator.clipboard.read()
+        .then(clipboardItems => {
+            const clipboardItem = clipboardItems[0];
+            let type = clipboardItem.types[0]
+            if (type == "image/png"){
+                clipboardItem.getType(type)
+                .then(blob => {
+                    var reader = new FileReader();
+                    reader.onload = function(event){
+                        f(event.target.result)
+                    };
+                    var source = reader.readAsDataURL(blob);
+                })
+                .catch(err => {
+                    console.error('blob error', err);
+                });
+            }
+            else{
+                console.error("unknown type");
+            }
+        })
+        .catch(err => {
+            console.error('permission denied', err);
+        });
+    }
+}
+
 function find_element(xpath, i){
     let results = document.evaluate(
         xpath,

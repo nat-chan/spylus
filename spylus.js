@@ -1,5 +1,3 @@
-'use strict';
-
 class Canvas{
     X = null;
     Y = null;
@@ -9,6 +7,7 @@ class Canvas{
         this.ctx = canvas.getContext("2d", {desynchronized: true});
         canvas.style.touchAction = 'none';
         canvas.addEventListener("pointerup", (e)=>{this.up(e)});
+        canvas.addEventListener("pointerleave", (e)=>{this.up(e)});
         canvas.addEventListener("pointerdown", (e)=>{this.down(e)});
         canvas.addEventListener("pointermove", (e)=>{this.move(e)});
     }
@@ -18,11 +17,8 @@ class Canvas{
             this.ctx.moveTo(this.X, this.Y);
             this.ctx.lineTo(e.offsetX, e.offsetY);
             this.ctx.lineCap = "round";
-            this.ctx.lineWidth = 5;
-            if(e.pointerType == "pen"){
-                this.ctx.lineWidth *= e.pressure;
-            }
-            this.ctx.strokeStyle = "black";
+            this.ctx.lineWidth = this.lineWidth(e);
+            this.ctx.strokeStyle = this.strokeStyle(e);
             this.ctx.stroke();
             this.X = e.offsetX;
             this.Y = e.offsetY;
@@ -38,37 +34,51 @@ class Canvas{
         this.Y = null;
         this.drawing = false;
     }
+    strokeStyle(e){
+        return "black";
+    }
+    lineWidth(e){
+        if(e.pointerType == "pen"){
+            return 5*e.pressure;
+        }else{
+            return 5;
+        }
+    }
 }
 
 let Save = Canvas => class extends Canvas{
-    constructor({
-        save_button,
-        save_input,
-    }){
+    constructor({save_input}){
         super(arguments[0]);
-        this.save_button = save_button;
         this.save_input = save_input;
-
-        save_button.addEventListener("click", (e)=>{this.save(e)});
     }
-    save(e){
+    up(e){
+        super.up(e);
         this.save_input.value = this.canvas.toDataURL();
         let event = new Event('change', {bubbles: true});
         this.save_input.dispatchEvent(event);
     };
 }
 
+let Load = Canvas => class extends Canvas{
+    constructor({}){super(arguments[0]);}
+    load(text){
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        let img = new Image();
+        img.onload = () => {
+            this.ctx.drawImage(img,0,0);
+        };
+        img.src = text;
+    };
+}
+
 let Paste = Canvas => class extends Canvas{
-    constructor({
-        paste_button,
-    }){
+    constructor({paste_button}){
         super(arguments[0]);
         this.paste_button = paste_button;
-
         paste_button.addEventListener("click", (e)=>{this.paste(e)});
     }
     paste(e){
-        read_clipboard(b=>{
+        this.read_clipboard(b=>{
             let img = new Image();
             img.onload = () => {
                 this.ctx.drawImage(img,0,0);
@@ -104,7 +114,84 @@ let Paste = Canvas => class extends Canvas{
     }
 }
 
-function find_element(xpath, i){
+let Copy = Canvas => class extends Canvas{
+    constructor({copy_button}){
+        super(arguments[0]);
+        this.copy_button = copy_button;
+        copy_button.addEventListener("click", (e)=>{this.copy(e)});
+    }
+    copy(e){
+        let tmp = document.createElement("canvas");
+        tmp.width = this.canvas.width;
+        tmp.height = this.canvas.height;
+        let tmpctx = tmp.getContext("2d");
+        tmpctx.fillStyle = "white";
+        tmpctx.fillRect(0,0,tmp.width,tmp.height);
+        tmpctx.drawImage(this.canvas,0,0);
+        dataURLtoBlob(tmp.toDataURL(), (blob)=>{
+            navigator.clipboard.write([
+                new ClipboardItem({[blob.type]: blob})
+            ])
+        });
+    }
+}
+
+let Color = Canvas => class extends Canvas{
+    constructor({color_input}){
+        super(arguments[0]);
+        this.color_input = color_input;
+    }
+    strokeStyle(e){
+        return this.color_input.value;
+    }
+}
+
+let Width = Canvas => class extends Canvas{
+    constructor({width_select}){
+        super(arguments[0]);
+        this.width_select = width_select;
+    }
+    lineWidth(e){
+        if(e.pointerType == "pen"){
+            return this.width_select.value*e.pressure;
+        }else{
+            return this.width_select.value;
+        }
+    }
+}
+
+function dataURLtoBlob(dataUrl, callback){
+    var req = new XMLHttpRequest;
+    req.open( 'GET', dataUrl );
+    req.responseType = 'blob';
+    req.onload = function fileLoaded(e){
+        callback(this.response);
+    };
+    req.send();
+}
+
+class Selector{
+    constructor({apps, selector_select}){
+        this.apps = apps;
+        this.selector_select = selector_select;
+        selector_select.addEventListener('change', (e)=>{this.select(e)});
+        for(let i=0; i<this.apps.length; i++){
+            this.apps[i].canvas.style.opacity = 0.9999999;
+        }
+        this.select();
+    }
+    select(e){
+        for(let i=0; i<this.apps.length; i++){
+            if(i == this.selector_select.value){
+                this.apps[i].canvas.style.zIndex = 1;
+            }else{
+                this.apps[i].canvas.style.zIndex = 0;
+            }
+        }
+    }
+}
+
+window.find_element = function(xpath, i){
     let results = document.evaluate(
         xpath,
         document,
@@ -114,3 +201,12 @@ function find_element(xpath, i){
     ).snapshotItem(i);
     return results;
 };
+
+window.elem = function(id, name, i){
+    return find_element(`//*[@id="${id}"]/../../..//${name}`, i);
+};
+
+window.mix = function(...mixins){
+    return mixins.reduceRight((x,f)=>f(x), Canvas);
+};
+

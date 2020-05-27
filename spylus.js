@@ -51,12 +51,15 @@ let Save = Canvas => class extends Canvas{
         super(arguments[0]);
         this.save_input = save_input;
     }
-    up(e){
-        super.up(e);
+    save(){
         this.save_input.value = this.canvas.toDataURL();
         let event = new Event('change', {bubbles: true});
         this.save_input.dispatchEvent(event);
-    };
+    }
+    up(e){
+        super.up(e);
+        this.save();
+    }
 }
 
 let Load = Canvas => class extends Canvas{
@@ -66,9 +69,10 @@ let Load = Canvas => class extends Canvas{
         let img = new Image();
         img.onload = () => {
             this.ctx.drawImage(img,0,0);
+            if(this.save){ this.save(); }
         };
         img.src = text;
-    };
+    }
 }
 
 let Paste = Canvas => class extends Canvas{
@@ -82,6 +86,7 @@ let Paste = Canvas => class extends Canvas{
             let img = new Image();
             img.onload = () => {
                 this.ctx.drawImage(img,0,0);
+                if(this.save){ this.save(); }
             };
             img.src = b;
         })
@@ -114,13 +119,9 @@ let Paste = Canvas => class extends Canvas{
     }
 }
 
-let Copy = Canvas => class extends Canvas{
-    constructor({copy_button}){
-        super(arguments[0]);
-        this.copy_button = copy_button;
-        copy_button.addEventListener("click", (e)=>{this.copy(e)});
-    }
-    copy(e){
+let _White = Canvas => class extends Canvas{
+    constructor({}){ super(arguments[0]); }
+    white(){
         let tmp = document.createElement("canvas");
         tmp.width = this.canvas.width;
         tmp.height = this.canvas.height;
@@ -128,7 +129,27 @@ let Copy = Canvas => class extends Canvas{
         tmpctx.fillStyle = "white";
         tmpctx.fillRect(0,0,tmp.width,tmp.height);
         tmpctx.drawImage(this.canvas,0,0);
-        dataURLtoBlob(tmp.toDataURL(), (blob)=>{
+        return tmp.toDataURL();
+    }
+}
+
+let White = Canvas => class extends _White(Canvas){
+    constructor({}){ super(arguments[0]); }
+    save(){
+        this.save_input.value = this.white();
+        let event = new Event('change', {bubbles: true});
+        this.save_input.dispatchEvent(event);
+    }
+}
+
+let Copy = Canvas => class extends _White(Canvas){
+    constructor({copy_button}){
+        super(arguments[0]);
+        this.copy_button = copy_button;
+        copy_button.addEventListener("click", (e)=>{this.copy(e)});
+    }
+    copy(e){
+        dataURLtoBlob(this.white(), (blob)=>{
             navigator.clipboard.write([
                 new ClipboardItem({[blob.type]: blob})
             ])
@@ -157,6 +178,35 @@ let Width = Canvas => class extends Canvas{
         }else{
             return this.width_select.value;
         }
+    }
+}
+
+let Clear = Canvas => class extends Canvas{
+    constructor({clear_button}){
+        super(arguments[0]);
+        this.clear_button = clear_button;
+        clear_button.addEventListener("click", (e)=>{this.clear(e)});
+    }
+    clear(e){
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+}
+
+//TODO
+let RedoUndo = Canvas => class extends Canvas{
+    history = [];
+    constructor({redo_button, undo_button}){
+        super(arguments[0]);
+        this.redo_button = redo_button;
+        this.undo_button = undo_button;
+        redo_button.addEventListener("click", (e)=>{this.redo(e)});
+        undo_button.addEventListener("click", (e)=>{this.undo(e)});
+    }
+    save(){
+        this.history.push(this.canvas.toDataURL());
+        this.save_input.value = this.history[-1];
+        let event = new Event('change', {bubbles: true});
+        this.save_input.dispatchEvent(event);
     }
 }
 

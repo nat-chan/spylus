@@ -119,6 +119,26 @@ let Paste = Canvas => class extends Canvas{
     }
 }
 
+let PasteCenter = Canvas => class extends Paste(Canvas){
+    paste(e){
+        this.read_clipboard(b=>{
+            let img = new Image();
+            img.onload = () => {
+                let cw = this.ctx.canvas.clientWidth;
+                let ch = this.ctx.canvas.clientHeight;
+                let iw = img.width;
+                let ih = img.height;
+                let scale = Math.min(cw/iw, ch/ih);
+                let dw = scale*iw;
+                let dh = scale*ih;
+                this.ctx.drawImage(img, (cw-dw)/2, (ch-dh)/2, dw, dh);
+                if(this.save){ this.save(); }
+            };
+            img.src = b;
+        })
+    }
+}
+
 let _White = Canvas => class extends Canvas{
     constructor({}){ super(arguments[0]); }
     white(){
